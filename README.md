@@ -3,6 +3,10 @@
 # Requirement
   Python >=3.4.3 <br> TensorFlow >=1.3.0
 # How to run
-`$ pip install requirements.txt`  
+`$ pip install --user -r requirements.txt`
+`$ python train.py --args=args-you-want-change `
+# Note
+  The code is the article of "Matrix Product Operators in deep neural networks"'s source code.<br>
+  The results and conclusion is declearing in the articles.
   
  
