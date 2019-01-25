@@ -2,6 +2,7 @@ import tensorflow as tf
 from .auxx import get_var_wrap
 
 def conv(inp,
+         in_ch,
          out_ch,
          window_size,         
          strides=[1, 1],
@@ -34,7 +35,7 @@ def conv(inp,
     with tf.variable_scope(scope):
         shape = inp.get_shape().as_list()
         assert len(shape) == 4, "Not 4D input tensor"
-        in_ch = shape[-1]
+        
 
         filters = get_var_wrap('filters',
                                shape=window_size + [in_ch, out_ch],
