@@ -22,7 +22,7 @@ from hyper_parameters import *
 
 net = None
 
-tf.set_random_seed(FLAGS.random_seed)
+#tf.set_random_seed(FLAGS.random_seed)
 np.random.seed(FLAGS.random_seed)
 
 def batch(image, label, batch_size, name):
