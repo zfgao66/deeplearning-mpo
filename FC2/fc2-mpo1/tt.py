@@ -7,6 +7,7 @@ import numpy as np
 def get_var_wrap(name,
                  shape,
                  initializer,
+                 regularizer,
                  trainable,
                  cpu_variable):
     if cpu_variable:
@@ -14,10 +15,12 @@ def get_var_wrap(name,
             return tf.get_variable(name,
                                    shape=shape,
                                    initializer=initializer,
+                                   regularizer=regularizer,
                                    trainable=trainable)
     return tf.get_variable(name,
                            shape=shape,
                            initializer=initializer,
+                           regularizer=regularizer,
                            trainable=trainable)
 
 def tto(inp,     #[batch,784]  
@@ -25,7 +28,7 @@ def tto(inp,     #[batch,784]
        out_modes,           
        mat_ranks,
        cores_initializer=tf.contrib.layers.xavier_initializer(uniform=False),
-       cores_regularizer=None,
+       cores_regularizer=tf.contrib.layers.l2_regularizer(0.0001),
        biases_initializer=tf.zeros_initializer,
        biases_regularizer=None,
        trainable=True,
@@ -57,10 +60,15 @@ def tto(inp,     #[batch,784]
                 cinit = cores_initializer[i]
             else:
                 cinit = cores_initializer
-            
+
+            if type(cores_regularizer) == list:
+                creg = cores_regularizer[i]
+            else:
+                creg = cores_regularizer
             mat_cores.append(get_var_wrap('mat_core_%d' % (i + 1),
                                           shape=[out_modes[i] * mat_ranks[i + 1], mat_ranks[i] * inp_modes[i]],
                                           initializer=cinit,
+                                          regularizer=creg,
                                           trainable=trainable,
                                           cpu_variable=cpu_variables))
             
