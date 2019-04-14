@@ -105,7 +105,6 @@ def inference(inputs, train_phase, cpu_variables=False):
                                scope='tt_0')
   inputs = tf.reshape(inputs, [-1,2,2,512])
   inputs = batch_activ_conv(inputs,512,512, 1, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_3')
-#  inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_4')
   inputs = maxpooling(inputs,scope='max_pool4') 
 #1x1
   inputs = tf.reshape(inputs, [-1, 1*1*512])
