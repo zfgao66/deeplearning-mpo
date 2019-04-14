@@ -10,15 +10,13 @@ sys.path.append('../')
 from hyper_parameters import *
 
 NUM_CLASSES = 10
-r1 = FLAGS.tt_rank1
-r2 = FLAGS.tt_rank2
-r3 = FLAGS.tt_rank3
+
 opts = {}
 opts['use_dropout'] = True
 opts['keep_prob'] = 1.0
 opts['ema_decay'] = 0.99
 opts['batch_norm_epsilon'] = 1e-3
-vgg_conv_drop_prob = FLAGS.vgg_conv_drop_prob
+vgg_conv_drop_prob = 0
 def batch_norm_relu(inputs, train_phase,cpu_variables=False,scope=None):
   """Performs a batch normalization followed by a ReLU."""
   # We set fused=True for a significant performance boost. See
@@ -64,7 +62,10 @@ def batch_activ_conv(inputs,in_features,out_features,kernel_size,train_phase, st
   if(vgg_conv_drop_prob > 0.0):
     do_scope = prefix + '_do'
     inputs = tf.nn.dropout(inputs, keep_prob=1-vgg_conv_drop_prob, name=do_scope)
-  return inputs   
+  return inputs
+
+
+
 def maxpooling(x, scope):
   return tf.nn.max_pool(x, ksize=[1,2,2,1],strides=[1,2, 2,1],padding="SAME",name=scope)
 def inference(inputs, train_phase, cpu_variables=False):
@@ -86,17 +87,32 @@ def inference(inputs, train_phase, cpu_variables=False):
   inputs = batch_activ_conv(inputs,512,512, 1, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv4_3')
   inputs = maxpooling(inputs,scope='max_pool4')   
 #2x2
-  inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_1')
-  inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_2')
+  # inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_1')
+  # inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_2')
+  inputs = batch_norm_relu(inputs, train_phase, cpu_variables, scope='tt_00_bn')
+  inputs = tensornet.layers.tt(inputs,
+                               np.array([2,8,8,8,2],dtype=np.int32),
+                               np.array([2,8,8,8,2],dtype=np.int32),
+                               np.array([1,4,4,4,4,1],dtype=np.int32),
+                               cpu_variables=cpu_variables,
+                               scope='tt_00')
+  inputs = batch_norm_relu(inputs, train_phase, cpu_variables, scope='tt_0_bn')
+  inputs = tensornet.layers.tt(inputs,
+                               np.array([2,8,8,8,2],dtype=np.int32),
+                               np.array([2,8,8,8,2],dtype=np.int32),
+                               np.array([1,4,4,4,4,1],dtype=np.int32),
+                               cpu_variables=cpu_variables,
+                               scope='tt_0')
+  inputs = tf.reshape(inputs, [-1,2,2,512])
   inputs = batch_activ_conv(inputs,512,512, 1, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_3')
-  inputs = maxpooling(inputs,scope='max_pool5') 
+#  inputs = batch_activ_conv(inputs,512,512, 3, strides=[1,1],cpu_variables=cpu_variables, train_phase=train_phase,prefix='conv5_4')
+  inputs = maxpooling(inputs,scope='max_pool4') 
 #1x1
   inputs = tf.reshape(inputs, [-1, 1*1*512])
   inputs = tensornet.layers.tt(inputs,
                                np.array([4,4,4,4,2],dtype=np.int32),
                                np.array([4,4,8,8,4],dtype=np.int32),
-                               np.array([1,r1,r1,r1,r1,1],dtype=np.int32),
-                               biases_initializer=None,
+                               np.array([1,4,4,4,4,1],dtype=np.int32),
                                cpu_variables=cpu_variables,
                                scope='tt_1')
   inputs = tf.nn.relu(inputs)
@@ -104,8 +120,7 @@ def inference(inputs, train_phase, cpu_variables=False):
   inputs = tensornet.layers.tt(inputs,
                                np.array([4,4,8,8,4],dtype=np.int32),
                                np.array([4,4,8,8,4],dtype=np.int32),
-                               np.array([1,r2,r2,r2,r2,1],dtype=np.int32),
-                               biases_initializer=None,
+                               np.array([1,4,4,4,4,1],dtype=np.int32),
                                cpu_variables=cpu_variables,
                                scope='tt_2')
   inputs = tf.nn.relu(inputs)
@@ -113,10 +128,10 @@ def inference(inputs, train_phase, cpu_variables=False):
   inputs = tensornet.layers.tt(inputs,
                                np.array([4,4,8,8,4],dtype=np.int32),
                                np.array([1,10,1,1,1],dtype=np.int32),
-                               np.array([1,r3,r3,r3,r3,1],dtype=np.int32),
+                               np.array([1,4,4,4,4,1],dtype=np.int32),
                                biases_initializer=None,
                                cpu_variables=cpu_variables,
-                               scope='tt_3')  
+                               scope='tt_4')  
   return inputs
 
 def losses(logits, labels):
