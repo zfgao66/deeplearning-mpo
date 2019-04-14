@@ -20,6 +20,7 @@ opts['batch_norm_epsilon'] = 1e-3
 res_conv_drop_prob = FLAGS.res_conv_drop_prob
 res_TT_drop_prob   = FLAGS.res_TT_drop_prob
 num_blocks = FLAGS.num_blocks
+# n_tt_after_res = FLAGS.n_tt_after_res
 k = FLAGS.widening_factor
 r = FLAGS.tt_ranks
 
@@ -127,27 +128,39 @@ def res_conv_layer(inputs, filters, blocks, strides, train_phase,
                             cpu_variables=cpu_variables, prefix=blocks_prefix)
   return inputs
 
-def res_tt_layer(inputs,train_phase, inp_modes,out_modes,mat_ranks,
-                 biases_initializer,cpu_variables,prefix):
-    #shortcut = inputs
-    bn_scope = prefix + '_bn'
+def res_tt_layer(inputs,train_phase, inp_modes,out_modes,mat_ranks,cpu_variables,prefix):
+    shortcut = inputs
+    bn_scope = prefix + '_bn1'
     inputs = batch_norm_relu(inputs, train_phase, cpu_variables, bn_scope)
 
     if res_TT_drop_prob > 0.0:
-        do_scope = prefix + '_do'
+        do_scope = prefix + '_do1'
         inputs = tf.nn.dropout(inputs, keep_prob=1 - res_TT_drop_prob, name=do_scope)
 
-    tt_scope = prefix + '_tt'
+    tt_scope = prefix + '_tt1'
     inputs = tensornet.layers.tt(inputs,
                                  np.array(inp_modes, dtype=np.int32),
                                  np.array(out_modes, dtype=np.int32),
                                  np.array(mat_ranks, dtype=np.int32),
-                                 biases_initializer=None,
                                  cpu_variables=cpu_variables,
                                  scope=tt_scope)
-    #shortcut = tf.reshape(shortcut, inputs.get_shape().as_list())
-    #return inputs + shortcut
-    return inputs
+
+    bn_scope = prefix + '_bn2'
+    inputs = batch_norm_relu(inputs, train_phase, cpu_variables, bn_scope)
+
+    if res_TT_drop_prob > 0.0:
+        do_scope = prefix + '_do2'
+        inputs = tf.nn.dropout(inputs, keep_prob=1 - res_TT_drop_prob, name=do_scope)
+
+    tt_scope = prefix + '_tt2'
+    inputs = tensornet.layers.tt(inputs,
+                                 np.array(inp_modes, dtype=np.int32),
+                                 np.array(out_modes, dtype=np.int32),
+                                 np.array(mat_ranks, dtype=np.int32),
+                                 cpu_variables=cpu_variables,
+                                 scope=tt_scope)
+    shortcut = tf.reshape(shortcut, inputs.get_shape().as_list())
+    return inputs + shortcut
 
 def inference(inputs, train_phase, cpu_variables=False):
     """Build the model up to where it may be used for inference.
@@ -176,10 +189,19 @@ def inference(inputs, train_phase, cpu_variables=False):
                             cpu_variables=cpu_variables,
                             prefix='res_conv_layer2')
     ##################################################################################
-    inputs = res_conv_layer(inputs=inputs, filters=64*k, blocks=num_blocks,
+    inputs = res_conv_layer(inputs=inputs, filters=64*k, blocks=num_blocks-1,
                             strides=[2,2], train_phase=train_phase,
                             cpu_variables=cpu_variables,
                             prefix='res_conv_layer3')
+    inputs_shape = inputs.get_shape().as_list()
+    inputs = res_tt_layer(inputs=inputs, train_phase=train_phase,
+                          inp_modes=[2, 4, 4, 4, 4, 4, 4, 2],
+                          out_modes=[2, 4, 4, 4, 4, 4, 4, 2],
+                          mat_ranks=[1, 4, 4, 4, 4, 4, 4, 4, 1],
+                          cpu_variables=cpu_variables,
+                          prefix='last_res2tto1')
+    inputs = tf.reshape(inputs, inputs_shape)
+
     ##################################################################################
     inputs = batch_norm_relu(inputs, train_phase, cpu_variables, scope='final_bn')
     inputs = tf.layers.average_pooling2d(inputs=inputs, pool_size=8, strides=1,
@@ -192,7 +214,8 @@ def inference(inputs, train_phase, cpu_variables=False):
                           mat_ranks=[1, r, r, r, 1],
                           biases_initializer=None,
                           cpu_variables=cpu_variables,
-                          prefix='tt_layer')
+                          prefix='final_tt_layer')
+    ##################################################################################
     return inputs
 
 def losses(logits, labels):
